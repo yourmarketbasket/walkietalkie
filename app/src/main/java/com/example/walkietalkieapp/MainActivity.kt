@@ -428,11 +428,9 @@ fun WalkieTalkieScreen(
             isTalking = true
             onTalkPressed()
         }
-    } else {
-        if (isTalking) {
-            isTalking = false
-            onTalkReleased()
-        }
+    } else if (isTalking) {
+        isTalking = false
+        onTalkReleased()
     }
 
     Column(
