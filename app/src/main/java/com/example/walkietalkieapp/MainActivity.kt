@@ -295,7 +295,11 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH
+            ) == PackageManager.PERMISSION_GRANTED && bluetoothAdapter != null && bluetoothAdapter.isEnabled
+        ) {
             discoveredDevices.clear()
             bluetoothAdapter.cancelDiscovery()
             bluetoothAdapter.startDiscovery()
