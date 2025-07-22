@@ -42,6 +42,7 @@ class BluetoothService(private val context: Context) {
             return
         }
         bluetoothAdapter?.startDiscovery()
+        android.widget.Toast.makeText(context, "Bluetooth discovery started", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     fun stopDiscovery() {
