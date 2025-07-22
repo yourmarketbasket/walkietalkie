@@ -70,8 +70,8 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allPermissionsGranted = permissions.all { it.value }
-        if (allPermissionsGranted) {
+        // Check if all permissions are granted
+        if (permissions.values.all { it }) {
             permissionsGranted = true
             Toast.makeText(this, "Permissions granted", Toast.LENGTH_SHORT).show()
             updateLocation()
@@ -81,12 +81,15 @@ class MainActivity : ComponentActivity() {
             })
         } else {
             permissionsGranted = false
-            if (shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
-                // Show a rationale to the user
-                Toast.makeText(this, "Location permission is required for device discovery.", Toast.LENGTH_LONG).show()
+            // Check if any permission was denied permanently
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (permissions.any { !it.value && !shouldShowRequestPermissionRationale(it.key) }) {
+                    Toast.makeText(this, "Required permissions denied permanently. App functionality limited.", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "Required permissions denied. App functionality limited.", Toast.LENGTH_LONG).show()
+                }
             } else {
-                // The user has denied the permission permanently
-                Toast.makeText(this, "Required permissions denied permanently. App functionality limited.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Required permissions denied. App functionality limited.", Toast.LENGTH_LONG).show()
             }
         }
     }
