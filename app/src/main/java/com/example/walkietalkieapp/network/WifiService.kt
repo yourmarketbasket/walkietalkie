@@ -9,10 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class WifiService(private val context: Context) {
-    private val wifiP2pManager: WifiP2pManager? by lazy(LazyThreadSafetyMode.NONE) {
+    val wifiP2pManager: WifiP2pManager? by lazy(LazyThreadSafetyMode.NONE) {
         context.getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager?
     }
-    private var channel: WifiP2pManager.Channel? = null
+    var channel: WifiP2pManager.Channel? = null
 
     private val _discoveredDevices = MutableStateFlow<List<Device>>(emptyList())
     val discoveredDevices: StateFlow<List<Device>> = _discoveredDevices
@@ -27,17 +27,15 @@ class WifiService(private val context: Context) {
             wifiManager.isWifiEnabled = true
         }
 
-        createGroup {
-            wifiP2pManager?.discoverPeers(channel, object : WifiP2pManager.ActionListener {
-                override fun onSuccess() {
-                    android.widget.Toast.makeText(context, "Wi-Fi discovery started", android.widget.Toast.LENGTH_SHORT).show()
-                }
+        wifiP2pManager?.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                android.widget.Toast.makeText(context, "Wi-Fi discovery started", android.widget.Toast.LENGTH_SHORT).show()
+            }
 
-                override fun onFailure(reasonCode: Int) {
-                    android.widget.Toast.makeText(context, "Wi-Fi discovery failed to start", android.widget.Toast.LENGTH_SHORT).show()
-                }
-            })
-        }
+            override fun onFailure(reasonCode: Int) {
+                android.widget.Toast.makeText(context, "Wi-Fi discovery failed to start", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     fun stopDiscovery() {

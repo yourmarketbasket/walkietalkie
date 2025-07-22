@@ -164,14 +164,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private lateinit var receiver: WiFiDirectBroadcastReceiver
+    private lateinit var intentFilter: android.content.IntentFilter
+
     override fun onResume() {
         super.onResume()
         bluetoothService.registerReceiver()
+        receiver = WiFiDirectBroadcastReceiver(wifiService.wifiP2pManager!!, wifiService.channel!!, wifiService.peerListListener)
+        intentFilter = android.content.IntentFilter().apply {
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+        }
+        registerReceiver(receiver, intentFilter)
     }
 
     override fun onPause() {
         super.onPause()
         bluetoothService.unregisterReceiver()
+        unregisterReceiver(receiver)
     }
 
     override fun onDestroy() {

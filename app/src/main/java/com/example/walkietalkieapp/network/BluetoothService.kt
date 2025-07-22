@@ -190,8 +190,14 @@ class BluetoothService(private val context: Context) {
                         ) {
                             return
                         }
-                        val newDevice = Device(device.name ?: "Unknown", device.address, "Bluetooth")
-                        _discoveredDevices.value = _discoveredDevices.value + newDevice
+                        val deviceName = device.name
+                        val deviceHardwareAddress = device.address
+                        if (deviceName != null && deviceHardwareAddress != null) {
+                            val newDevice = Device(deviceName, deviceHardwareAddress, "Bluetooth")
+                            if (!_discoveredDevices.value.any { it.address == newDevice.address }) {
+                                _discoveredDevices.value = _discoveredDevices.value + newDevice
+                            }
+                        }
                     }
                 }
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
