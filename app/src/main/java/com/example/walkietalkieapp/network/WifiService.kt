@@ -88,18 +88,20 @@ class WifiService(private val context: Context) {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> arrayOf(
                 Manifest.permission.ACCESS_WIFI_STATE,
                 Manifest.permission.CHANGE_WIFI_STATE,
-                Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
             )
             else -> arrayOf(
                 Manifest.permission.ACCESS_WIFI_STATE,
-                Manifest.permission.CHANGE_WIFI_STATE
+                Manifest.permission.CHANGE_WIFI_STATE,
+                Manifest.permission.ACCESS_COARSE_LOCATION
             )
         }
 
     fun checkAndRequestPermissions(activity: FragmentActivity, onPermissionResult: (Boolean) -> Unit) {
         permissionCallback = onPermissionResult
         val missingPermissions = requiredPermissions.filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(activity, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (missingPermissions.isEmpty()) {
@@ -121,10 +123,10 @@ class WifiService(private val context: Context) {
         }
     }
 
-    fun startDiscovery() {
+    fun startDiscovery(activity: FragmentActivity) {
         if (!wifiP2pManager.isAvailable()) return
 
-        checkAndRequestPermissions(context as FragmentActivity) { granted ->
+        checkAndRequestPermissions(activity) { granted ->
             if (granted) {
                 if (wifiManager.isWifiEnabled) {
                     initializePeerDiscovery()
@@ -219,54 +221,50 @@ class WifiService(private val context: Context) {
         Log.d(TAG, "Discovered ${refreshedPeers.size} devices")
     }
 
-    fun connect(device: Device, onConnected: () -> Unit) {
+    fun connect(activity: FragmentActivity, device: Device, onConnected: () -> Unit) {
         if (!wifiP2pManager.isAvailable()) return
 
-        checkAndRequestPermissions(context as FragmentActivity) { granted ->
+        checkAndRequestPermissions(activity) { granted ->
             if (granted) {
                 val config = WifiP2pConfig().apply {
                     deviceAddress = device.address
                     wps.setup = WpsInfo.PBC
                 }
-                if (hasRequiredPermissions()) {
-                    wifiP2pManager?.connect(channel!!, config, object : WifiP2pManager.ActionListener {
-                        override fun onSuccess() {
-                            Log.d(TAG, "Connection initiated to ${device.name}")
-                            onConnected()
-                            Toast.makeText(context, "Connecting to ${device.name}", Toast.LENGTH_SHORT).show()
-                        }
+                wifiP2pManager?.connect(channel!!, config, object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() {
+                        Log.d(TAG, "Connection initiated to ${device.name}")
+                        onConnected()
+                        Toast.makeText(context, "Connecting to ${device.name}", Toast.LENGTH_SHORT).show()
+                    }
 
-                        override fun onFailure(reason: Int) {
-                            Log.e(TAG, "Connection failed to ${device.name}: $reason")
-                            Toast.makeText(context, "Connection failed to ${device.name}", Toast.LENGTH_SHORT).show()
-                        }
-                    })
-                }
+                    override fun onFailure(reason: Int) {
+                        Log.e(TAG, "Connection failed to ${device.name}: $reason")
+                        Toast.makeText(context, "Connection failed to ${device.name}", Toast.LENGTH_SHORT).show()
+                    }
+                })
             } else {
                 Toast.makeText(context, "Required permissions not granted", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    fun createGroup(onGroupCreated: () -> Unit) {
+    fun createGroup(activity: FragmentActivity, onGroupCreated: () -> Unit) {
         if (!wifiP2pManager.isAvailable()) return
 
-        checkAndRequestPermissions(context as FragmentActivity) { granted ->
+        checkAndRequestPermissions(activity) { granted ->
             if (granted) {
-                if (hasRequiredPermissions()) {
-                    wifiP2pManager?.createGroup(channel!!, object : WifiP2pManager.ActionListener {
-                        override fun onSuccess() {
-                            Log.d(TAG, "Group created successfully")
-                            onGroupCreated()
-                            Toast.makeText(context, "Wi-Fi Direct group created", Toast.LENGTH_SHORT).show()
-                        }
+                wifiP2pManager?.createGroup(channel!!, object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() {
+                        Log.d(TAG, "Group created successfully")
+                        onGroupCreated()
+                        Toast.makeText(context, "Wi-Fi Direct group created", Toast.LENGTH_SHORT).show()
+                    }
 
-                        override fun onFailure(reason: Int) {
-                            Log.e(TAG, "Group creation failed: $reason")
-                            Toast.makeText(context, "Group creation failed: $reason", Toast.LENGTH_SHORT).show()
-                        }
-                    })
-                }
+                    override fun onFailure(reason: Int) {
+                        Log.e(TAG, "Group creation failed: $reason")
+                        Toast.makeText(context, "Group creation failed: $reason", Toast.LENGTH_SHORT).show()
+                    }
+                })
             } else {
                 Toast.makeText(context, "Required permissions not granted", Toast.LENGTH_LONG).show()
             }
