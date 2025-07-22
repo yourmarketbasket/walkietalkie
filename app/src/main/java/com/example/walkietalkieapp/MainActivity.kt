@@ -317,6 +317,8 @@ class MainActivity : ComponentActivity() {
                     runOnUiThread {
                         Toast.makeText(this, "Bluetooth connected to closest device", Toast.LENGTH_SHORT).show()
                     }
+                } else {
+                    // Handle the case where permission is not granted
                 }
             } catch (e: IOException) {
                 runOnUiThread {
