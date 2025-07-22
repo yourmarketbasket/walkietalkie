@@ -3,13 +3,5 @@
     <!-- Theme for light mode -->
     <style name="WalkieTalkieAppTheme" parent="Theme.Material3.Light.NoActionBar">
         <!-- Customize your theme here -->
-        <item name="colorPrimary">@color/purple_40</item>
-        <item name="colorOnPrimary">@color/white</item>
-        <item name="colorPrimaryContainer">@color/purple_80</item>
-        <item name="colorOnPrimaryContainer">@color/purple_grey_40</item>
-        <item name="colorSecondary">@color/pink_40</item>
-        <item name="colorOnSecondary">@color/white</item>
-        <item name="colorSecondaryContainer">@color/pink_80</item>
-        <item name="colorOnSecondaryContainer">@color/black</item>
     </style>
 </resources>
