@@ -36,24 +36,29 @@ fun DeviceListScreen(
             contentPadding = PaddingValues(16.dp)
         ) {
             items(devices) { device ->
-                DeviceListItem(device = device, onClick = { onDeviceClick(device) })
+                DeviceListItem(
+                    device = device,
+                    onDeviceClick = { onDeviceClick(device) },
+                    onPairClick = { onDeviceClick(device) }
+                )
             }
         }
     }
 }
 
 @Composable
-fun DeviceListItem(device: Device, onClick: () -> Unit) {
+fun DeviceListItem(device: Device, onDeviceClick: (Device) -> Unit, onPairClick: (Device) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
-            .clickable(onClick = onClick),
+            .clickable { onDeviceClick(device) },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
                 Text(
@@ -64,6 +69,9 @@ fun DeviceListItem(device: Device, onClick: () -> Unit) {
                     text = "${device.address} - ${device.type}",
                     style = MaterialTheme.typography.bodyMedium
                 )
+            }
+            Button(onClick = { onPairClick(device) }) {
+                Text("Pair")
             }
         }
     }

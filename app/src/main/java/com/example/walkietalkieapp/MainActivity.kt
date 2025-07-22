@@ -123,9 +123,7 @@ class MainActivity : ComponentActivity() {
                     devices = allDevices,
                     onDeviceClick = { device ->
                         if (device.type == "Bluetooth") {
-                            bluetoothService.connect(device) {
-                                navController.navigate("talk")
-                            }
+                            bluetoothService.pairDevice(device.address)
                         } else {
                             wifiService.connect(device) {
                                 navController.navigate("talk")
@@ -141,7 +139,14 @@ class MainActivity : ComponentActivity() {
             composable("talk") {
                 TalkScreen(
                     onTalkPressed = { /* Start talking */ },
-                    onTalkReleased = { /* Stop talking */ }
+                    onTalkReleased = { /* Stop talking */ },
+                    bluetoothService = bluetoothService
+                )
+            }
+            composable("incoming_call") {
+                IncomingCallScreen(
+                    onAccept = { /* Handle accept */ },
+                    onReject = { /* Handle reject */ }
                 )
             }
         }
@@ -164,7 +169,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun TalkScreen(onTalkPressed: () -> Unit, onTalkReleased: () -> Unit) {
+fun TalkScreen(
+    onTalkPressed: () -> Unit,
+    onTalkReleased: () -> Unit,
+    bluetoothService: BluetoothService
+) {
     var isTalking by remember { mutableStateOf(false) }
 
     Column(
@@ -174,12 +183,20 @@ fun TalkScreen(onTalkPressed: () -> Unit, onTalkReleased: () -> Unit) {
     ) {
         Button(
             onClick = {
-                if (isTalking) onTalkReleased() else onTalkPressed()
+                if (isTalking) {
+                    onTalkReleased()
+                } else {
+                    onTalkPressed()
+                }
                 isTalking = !isTalking
             }
         ) {
             Text(if (isTalking) "Stop" else "Talk")
         }
+    }
+
+    bluetoothService.receiveData { data ->
+        // Play received audio data
     }
 }
 

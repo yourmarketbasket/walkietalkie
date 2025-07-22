@@ -65,4 +65,16 @@ class WifiService(private val context: Context) {
             }
         })
     }
+
+    fun createGroup(onGroupCreated: () -> Unit) {
+        wifiP2pManager?.createGroup(channel, object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                onGroupCreated()
+            }
+
+            override fun onFailure(reason: Int) {
+                // Group creation failed
+            }
+        })
+    }
 }

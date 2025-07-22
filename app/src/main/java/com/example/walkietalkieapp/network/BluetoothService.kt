@@ -56,6 +56,18 @@ class BluetoothService(private val context: Context) {
         bluetoothAdapter?.cancelDiscovery()
     }
 
+    fun pairDevice(deviceAddress: String) {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress)
+        device?.createBond()
+    }
+
     fun connect(device: Device, onConnected: () -> Unit) {
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -135,6 +147,7 @@ class BluetoothService(private val context: Context) {
 
     fun registerReceiver() {
         val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+        filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
         context.registerReceiver(receiver, filter)
     }
 
@@ -144,18 +157,26 @@ class BluetoothService(private val context: Context) {
 
     private val receiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == BluetoothDevice.ACTION_FOUND) {
-                val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                if (device != null) {
-                    if (ActivityCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.BLUETOOTH_CONNECT
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        return
+            when (intent.action) {
+                BluetoothDevice.ACTION_FOUND -> {
+                    val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    if (device != null) {
+                        if (ActivityCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.BLUETOOTH_CONNECT
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            return
+                        }
+                        val newDevice = Device(device.name ?: "Unknown", device.address, "Bluetooth")
+                        _discoveredDevices.value = _discoveredDevices.value + newDevice
                     }
-                    val newDevice = Device(device.name ?: "Unknown", device.address, "Bluetooth")
-                    _discoveredDevices.value = _discoveredDevices.value + newDevice
+                }
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                    val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    if (device?.bondState == BluetoothDevice.BOND_BONDED) {
+                        // Successfully paired
+                    }
                 }
             }
         }
