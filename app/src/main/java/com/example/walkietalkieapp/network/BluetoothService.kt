@@ -50,65 +50,44 @@ class BluetoothService(private val context: Context) {
     fun startDiscovery(activity: android.app.Activity) {
         if (bluetoothAdapter == null) {
             Log.e(TAG, "Bluetooth not supported on this device")
-            Toast.makeText(context, "Bluetooth not supported", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Check if Bluetooth is enabled
         if (!bluetoothAdapter.isEnabled) {
-            Log.d(TAG, "Bluetooth is disabled, requesting to enable")
             Toast.makeText(context, "Turning on Bluetooth...", Toast.LENGTH_SHORT).show()
-            if (!checkPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-                Log.e(TAG, "BLUETOOTH_CONNECT permission not granted")
+            if (checkPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
+                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                activity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT)
+            } else {
                 Toast.makeText(context, "Bluetooth permission required", Toast.LENGTH_SHORT).show()
-                return
             }
-            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            activity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT)
             return
         }
 
-        // Clear previous devices
         _discoveredDevices.value = emptyList()
-        Log.d(TAG, "Cleared previous discovered devices")
 
-        // Make device discoverable
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (!checkPermission(Manifest.permission.BLUETOOTH_ADVERTISE)) {
-                Log.e(TAG, "BLUETOOTH_ADVERTISE permission not granted")
-                Toast.makeText(context, "Bluetooth advertise permission required", Toast.LENGTH_SHORT).show()
-                return
-            }
-        } else if (!checkPermission(Manifest.permission.BLUETOOTH)) {
-            Log.e(TAG, "BLUETOOTH permission not granted for discoverability")
-            Toast.makeText(context, "Bluetooth permission required", Toast.LENGTH_SHORT).show()
-            return
+        if (checkPermission(Manifest.permission.BLUETOOTH_ADVERTISE)) {
+            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+            discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+            activity.startActivity(discoverableIntent)
+        } else {
+            Toast.makeText(context, "Bluetooth advertise permission required", Toast.LENGTH_SHORT).show()
         }
-        val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
-        discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-        activity.startActivity(discoverableIntent)
-        Log.d(TAG, "Requested device discoverability")
 
-        // Register receiver before starting discovery
         registerReceiver()
 
-        // Start discovery
-        if (!checkPermission(Manifest.permission.BLUETOOTH_SCAN)) {
-            Log.e(TAG, "BLUETOOTH_SCAN permission not granted")
-            Toast.makeText(context, "Bluetooth scan permission required", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (bluetoothAdapter.isDiscovering) {
-            bluetoothAdapter.cancelDiscovery()
-            Log.d(TAG, "Cancelled ongoing discovery")
-        }
-        val started = bluetoothAdapter.startDiscovery()
-        if (started) {
-            Log.d(TAG, "Bluetooth discovery started successfully")
-            Toast.makeText(context, "Bluetooth discovery started", Toast.LENGTH_SHORT).show()
+        if (checkPermission(Manifest.permission.BLUETOOTH_SCAN)) {
+            if (bluetoothAdapter.isDiscovering) {
+                bluetoothAdapter.cancelDiscovery()
+            }
+            val started = bluetoothAdapter.startDiscovery()
+            if (started) {
+                Log.d(TAG, "Bluetooth discovery started")
+            } else {
+                Log.e(TAG, "Failed to start Bluetooth discovery")
+            }
         } else {
-            Log.e(TAG, "Failed to start Bluetooth discovery")
-            Toast.makeText(context, "Failed to start discovery", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Bluetooth scan permission required", Toast.LENGTH_SHORT).show()
         }
     }
     fun stopDiscovery() {

@@ -76,16 +76,19 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACCESS_WIFI_STATE,
             Manifest.permission.CHANGE_WIFI_STATE,
-            Manifest.permission.INTERNET,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.INTERNET
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_SCAN)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
         } else {
             permissions.add(Manifest.permission.BLUETOOTH)
             permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
+            permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
 
         return permissions.toTypedArray()
