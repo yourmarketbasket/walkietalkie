@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
                         handler.postDelayed({
                             isDiscovering = false
                             bluetoothService.stopDiscovery()
-                            wifiService.stopDiscovery()
+                            wifiService.stopDiscovery(this@MainActivity)
                         }, 10000)
                     },
                     isDiscovering = isDiscovering
