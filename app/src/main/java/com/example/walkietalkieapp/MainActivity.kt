@@ -34,6 +34,7 @@ import com.example.walkietalkieapp.network.BluetoothService
 import com.example.walkietalkieapp.network.WiFiDirectBroadcastReceiver
 import com.example.walkietalkieapp.network.WifiService
 import com.example.walkietalkieapp.ui.DeviceListScreen
+import android.util.Log
 import com.example.walkietalkieapp.ui.IncomingCallScreen
 import com.example.walkietalkieapp.ui.theme.WalkieTalkieAppTheme
 
@@ -120,6 +121,9 @@ class MainActivity : ComponentActivity() {
                 val bluetoothDevices by bluetoothService.discoveredDevices.collectAsState()
                 val wifiDevices by wifiService.discoveredDevices.collectAsState()
                 val allDevices = bluetoothDevices + wifiDevices
+                Log.d("MainActivity", "Bluetooth devices: ${bluetoothDevices.size}")
+                Log.d("MainActivity", "Wi-Fi devices: ${wifiDevices.size}")
+                Log.d("MainActivity", "All devices: ${allDevices.size}")
 
                 var isDiscovering by remember { mutableStateOf(false) }
 

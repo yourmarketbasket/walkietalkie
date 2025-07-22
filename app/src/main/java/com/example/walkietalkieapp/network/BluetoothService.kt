@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import android.util.Log
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.*
@@ -35,11 +36,13 @@ class BluetoothService(private val context: Context) {
 
     fun startDiscovery(activity: android.app.Activity) {
         if (bluetoothAdapter == null) {
+            Log.e("BluetoothService", "Bluetooth not supported")
             android.widget.Toast.makeText(context, "Bluetooth not supported", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
 
         if (!bluetoothAdapter.isEnabled) {
+            android.widget.Toast.makeText(context, "Turning on Bluetooth...", android.widget.Toast.LENGTH_SHORT).show()
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             if (ActivityCompat.checkSelfPermission(
                     context,
@@ -63,6 +66,7 @@ class BluetoothService(private val context: Context) {
             return
         }
         bluetoothAdapter.startDiscovery()
+        Log.d("BluetoothService", "Discovery initiated successfully")
         android.widget.Toast.makeText(context, "Bluetooth discovery started", android.widget.Toast.LENGTH_SHORT).show()
     }
 

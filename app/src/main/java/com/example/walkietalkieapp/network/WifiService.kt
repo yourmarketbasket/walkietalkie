@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Looper
+import android.util.Log
 import com.example.walkietalkieapp.model.Device
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,15 +25,18 @@ class WifiService(private val context: Context) {
     fun startDiscovery() {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
         if (!wifiManager.isWifiEnabled) {
+            android.widget.Toast.makeText(context, "Turning on Wi-Fi...", android.widget.Toast.LENGTH_SHORT).show()
             wifiManager.isWifiEnabled = true
         }
 
         wifiP2pManager?.discoverPeers(channel, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
+                Log.d("WifiService", "Discovery initiated successfully")
                 android.widget.Toast.makeText(context, "Wi-Fi discovery started", android.widget.Toast.LENGTH_SHORT).show()
             }
 
             override fun onFailure(reasonCode: Int) {
+                Log.e("WifiService", "Discovery failed to start with reason code: $reasonCode")
                 android.widget.Toast.makeText(context, "Wi-Fi discovery failed to start", android.widget.Toast.LENGTH_SHORT).show()
             }
         })
