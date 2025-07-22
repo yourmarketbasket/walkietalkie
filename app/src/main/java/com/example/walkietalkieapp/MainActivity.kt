@@ -31,6 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.walkietalkieapp.model.Device
 import com.example.walkietalkieapp.network.BluetoothService
+import com.example.walkietalkieapp.network.WiFiDirectBroadcastReceiver
 import com.example.walkietalkieapp.network.WifiService
 import com.example.walkietalkieapp.ui.DeviceListScreen
 import com.example.walkietalkieapp.ui.IncomingCallScreen
