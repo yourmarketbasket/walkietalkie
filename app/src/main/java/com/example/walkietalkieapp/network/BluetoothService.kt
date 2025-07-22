@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
@@ -56,6 +57,13 @@ class BluetoothService(private val context: Context) {
     }
 
     fun connect(device: Device, onConnected: () -> Unit) {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val bluetoothDevice = bluetoothAdapter?.getRemoteDevice(device.address)
