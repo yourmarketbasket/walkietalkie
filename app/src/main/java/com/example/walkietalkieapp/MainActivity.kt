@@ -120,6 +120,8 @@ class MainActivity : ComponentActivity() {
                 val wifiDevices by wifiService.discoveredDevices.collectAsState()
                 val allDevices = bluetoothDevices + wifiDevices
 
+                var isDiscovering by remember { mutableStateOf(false) }
+
                 DeviceListScreen(
                     devices = allDevices,
                     onDeviceClick = { device ->
@@ -132,9 +134,18 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onDiscoverClick = {
-                        bluetoothService.startDiscovery()
+                        isDiscovering = true
+                        bluetoothService.startDiscovery(this@MainActivity)
                         wifiService.startDiscovery()
-                    }
+                        // Stop discovering after a certain time
+                        val handler = android.os.Handler()
+                        handler.postDelayed({
+                            isDiscovering = false
+                            bluetoothService.stopDiscovery()
+                            wifiService.stopDiscovery()
+                        }, 10000)
+                    },
+                    isDiscovering = isDiscovering
                 )
             }
             composable("talk") {

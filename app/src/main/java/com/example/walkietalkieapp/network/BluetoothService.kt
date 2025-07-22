@@ -33,7 +33,28 @@ class BluetoothService(private val context: Context) {
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState
 
-    fun startDiscovery() {
+    fun startDiscovery(activity: android.app.Activity) {
+        if (bluetoothAdapter == null) {
+            android.widget.Toast.makeText(context, "Bluetooth not supported", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (!bluetoothAdapter.isEnabled) {
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+            activity.startActivityForResult(enableBtIntent, 1)
+        }
+
+        val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+        discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+        activity.startActivity(discoverableIntent)
+
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_SCAN
@@ -41,7 +62,7 @@ class BluetoothService(private val context: Context) {
         ) {
             return
         }
-        bluetoothAdapter?.startDiscovery()
+        bluetoothAdapter.startDiscovery()
         android.widget.Toast.makeText(context, "Bluetooth discovery started", android.widget.Toast.LENGTH_SHORT).show()
     }
 

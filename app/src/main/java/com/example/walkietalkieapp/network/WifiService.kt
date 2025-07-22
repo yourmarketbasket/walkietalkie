@@ -22,15 +22,22 @@ class WifiService(private val context: Context) {
     }
 
     fun startDiscovery() {
-        wifiP2pManager?.discoverPeers(channel, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                android.widget.Toast.makeText(context, "Wi-Fi discovery started", android.widget.Toast.LENGTH_SHORT).show()
-            }
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+        if (!wifiManager.isWifiEnabled) {
+            wifiManager.isWifiEnabled = true
+        }
 
-            override fun onFailure(reasonCode: Int) {
-                android.widget.Toast.makeText(context, "Wi-Fi discovery failed to start", android.widget.Toast.LENGTH_SHORT).show()
-            }
-        })
+        createGroup {
+            wifiP2pManager?.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    android.widget.Toast.makeText(context, "Wi-Fi discovery started", android.widget.Toast.LENGTH_SHORT).show()
+                }
+
+                override fun onFailure(reasonCode: Int) {
+                    android.widget.Toast.makeText(context, "Wi-Fi discovery failed to start", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            })
+        }
     }
 
     fun stopDiscovery() {

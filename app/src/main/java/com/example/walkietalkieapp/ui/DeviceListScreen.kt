@@ -15,11 +15,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.walkietalkieapp.model.Device
 
+import androidx.compose.material3.CircularProgressIndicator
+
 @Composable
 fun DeviceListScreen(
     devices: List<Device>,
     onDeviceClick: (Device) -> Unit,
-    onDiscoverClick: () -> Unit
+    onDiscoverClick: () -> Unit,
+    isDiscovering: Boolean
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -30,6 +33,9 @@ fun DeviceListScreen(
             modifier = Modifier.padding(16.dp)
         ) {
             Text("Discover Devices")
+        }
+        if (isDiscovering) {
+            CircularProgressIndicator(modifier = Modifier.padding(16.dp))
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
