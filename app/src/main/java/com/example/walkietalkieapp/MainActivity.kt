@@ -66,32 +66,12 @@ class MainActivity : ComponentActivity() {
     private val DISCOVERY_MESSAGE = "WALKIE_TALKIE_DISCOVERY"
     private var permissionsGranted by mutableStateOf(false)
     private var lastKnownLocation: Location? = null
+    private var isReceiverRegistered = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        // Check if all permissions are granted
-        if (permissions.values.all { it }) {
-            permissionsGranted = true
-            Toast.makeText(this, "Permissions granted", Toast.LENGTH_SHORT).show()
-            updateLocation()
-            // Register receiver after permissions are granted
-            registerReceiver(receiver, IntentFilter(BluetoothDevice.ACTION_FOUND).apply {
-                addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-            })
-        } else {
-            permissionsGranted = false
-            // Check if any permission was denied permanently
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (permissions.any { !it.value && !shouldShowRequestPermissionRationale(it.key) }) {
-                    Toast.makeText(this, "Required permissions denied permanently. App functionality limited.", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "Required permissions denied. App functionality limited.", Toast.LENGTH_LONG).show()
-                }
-            } else {
-                Toast.makeText(this, "Required permissions denied. App functionality limited.", Toast.LENGTH_LONG).show()
-            }
-        }
+        handlePermissionResult(permissions)
     }
 
     private val receiver = object : BroadcastReceiver() {
@@ -101,11 +81,7 @@ class MainActivity : ComponentActivity() {
                     val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                     val rssi: Int = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE).toInt()
                     device?.let {
-                        if (ActivityCompat.checkSelfPermission(
-                                this@MainActivity,
-                                Manifest.permission.BLUETOOTH_CONNECT
-                            ) == PackageManager.PERMISSION_GRANTED
-                        ) {
+                        if (checkBluetoothConnectPermission()) {
                             discoveredDevices[device] = rssi
                         }
                     }
@@ -125,8 +101,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Request permissions immediately on first launch
         requestPermissions()
 
         setContent {
@@ -156,47 +130,109 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestPermissions() {
+    private fun getRequiredPermissions(): Array<String> {
         val permissions = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.BLUETOOTH,
-            Manifest.permission.BLUETOOTH_ADMIN,
             Manifest.permission.ACCESS_WIFI_STATE,
             Manifest.permission.CHANGE_WIFI_STATE,
             Manifest.permission.INTERNET
         )
+
+        // Bluetooth permissions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_SCAN)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            permissions.add(Manifest.permission.BLUETOOTH)
+            permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
         }
+
+        // Location permissions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
         } else {
             permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
 
-        val permissionsToRequest = permissions.filter {
+        return permissions.toTypedArray()
+    }
+
+    private fun requestPermissions() {
+        val permissionsToRequest = getRequiredPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }.toTypedArray()
 
-        if (permissionsToRequest.isNotEmpty()) {
-            permissionLauncher.launch(permissionsToRequest)
-        } else {
+        if (permissionsToRequest.isEmpty()) {
             permissionsGranted = true
-            // Register receiver when permissions are already granted
-            registerReceiver(receiver, IntentFilter(BluetoothDevice.ACTION_FOUND).apply {
-                addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-            })
+            registerReceiverIfNeeded()
             updateLocation()
+        } else {
+            permissionLauncher.launch(permissionsToRequest)
+        }
+    }
+
+    private fun handlePermissionResult(permissions: Map<String, Boolean>) {
+        if (permissions.values.all { it }) {
+            permissionsGranted = true
+            Toast.makeText(this, "Permissions granted", Toast.LENGTH_SHORT).show()
+            registerReceiverIfNeeded()
+            updateLocation()
+        } else {
+            permissionsGranted = false
+            val permanentlyDenied = permissions.any { (permission, granted) ->
+                !granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                        !shouldShowRequestPermissionRationale(permission)
+            }
+            val message = if (permanentlyDenied) {
+                "Some permissions were permanently denied. Please enable them in Settings to use all features."
+            } else {
+                "Required permissions denied. App functionality limited."
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun checkBluetoothConnectPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun checkBluetoothScanPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun checkLocationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun registerReceiverIfNeeded() {
+        if (!isReceiverRegistered && permissionsGranted) {
+            val filter = IntentFilter().apply {
+                addAction(BluetoothDevice.ACTION_FOUND)
+                addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            }
+            registerReceiver(receiver, filter)
+            isReceiverRegistered = true
         }
     }
 
     private fun updateLocation() {
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
+        if (checkLocationPermission()) {
             val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
             try {
                 lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
@@ -223,12 +259,28 @@ class MainActivity : ComponentActivity() {
 
     private fun isWifiAvailable(): Boolean {
         if (!permissionsGranted) return false
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
+            return false
+        }
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         return wifiManager.isWifiEnabled
     }
 
     private fun startWifiDiscovery() {
-        if (!permissionsGranted) return
+        if (!permissionsGranted) {
+            runOnUiThread {
+                Toast.makeText(this, "Permissions not granted", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
+            runOnUiThread {
+                Toast.makeText(this, "Wi-Fi permissions not granted", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
         try {
             udpSocket = DatagramSocket(UDP_PORT).apply {
                 broadcast = true
@@ -241,12 +293,12 @@ class MainActivity : ComponentActivity() {
             )
 
             CoroutineScope(Dispatchers.IO).launch {
-                udpSocket?.send(discoveryPacket)
-
-                val receiveBuffer = ByteArray(1024)
-                val receivePacket = DatagramPacket(receiveBuffer, receiveBuffer.size)
-
                 try {
+                    udpSocket?.send(discoveryPacket)
+
+                    val receiveBuffer = ByteArray(1024)
+                    val receivePacket = DatagramPacket(receiveBuffer, receiveBuffer.size)
+
                     udpSocket?.receive(receivePacket)
                     val message = String(receivePacket.data, 0, receivePacket.length)
                     if (message == DISCOVERY_MESSAGE) {
@@ -270,7 +322,6 @@ class MainActivity : ComponentActivity() {
             startBluetoothDiscovery()
         }
     }
-
     private fun startBluetoothDiscovery() {
         if (!permissionsGranted) {
             runOnUiThread {
@@ -279,30 +330,14 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH
-            ) != PackageManager.PERMISSION_GRANTED ||
-            ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH_SCAN
-            ) != PackageManager.PERMISSION_GRANTED ||
-            ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!checkBluetoothScanPermission() || !checkLocationPermission()) {
             runOnUiThread {
                 Toast.makeText(this, "Bluetooth or location permissions not granted", Toast.LENGTH_SHORT).show()
             }
             return
         }
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH
-            ) == PackageManager.PERMISSION_GRANTED && bluetoothAdapter != null && bluetoothAdapter.isEnabled
-        ) {
+        if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
             discoveredDevices.clear()
             bluetoothAdapter.cancelDiscovery()
             bluetoothAdapter.startDiscovery()
@@ -314,25 +349,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun connectToClosestBluetoothDevice() {
-        if (!permissionsGranted) return
+        if (!permissionsGranted || !checkBluetoothConnectPermission()) return
         if (discoveredDevices.isEmpty()) return
 
         val closestDevice = discoveredDevices.maxByOrNull { it.value }?.key
         closestDevice?.let { device ->
             try {
-                if (ActivityCompat.checkSelfPermission(
-                        this,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    bluetoothAdapter?.cancelDiscovery()
-                    bluetoothSocket = device.createRfcommSocketToServiceRecord(uuid)
-                    bluetoothSocket?.connect()
-                    runOnUiThread {
-                        Toast.makeText(this, "Bluetooth connected to closest device", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    // Handle the case where permission is not granted
+                bluetoothAdapter?.cancelDiscovery()
+                bluetoothSocket = device.createRfcommSocketToServiceRecord(uuid)
+                bluetoothSocket?.connect()
+                runOnUiThread {
+                    Toast.makeText(this, "Bluetooth connected to closest device", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: IOException) {
                 runOnUiThread {
@@ -357,11 +384,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             runOnUiThread {
                 Toast.makeText(this, "Recording permission not granted", Toast.LENGTH_SHORT).show()
             }
@@ -422,8 +445,9 @@ class MainActivity : ComponentActivity() {
             // Ignore
         }
         audioRecord?.release()
-        if (permissionsGranted) {
+        if (isReceiverRegistered) {
             unregisterReceiver(receiver)
+            isReceiverRegistered = false
         }
     }
 }
@@ -485,7 +509,7 @@ fun PermissionRequestScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Please grant all required permissions to use this app, including location for nearby device discovery.",
+            text = "Please grant all required permissions, including location and Bluetooth, for device discovery and communication.",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(16.dp)
         )
