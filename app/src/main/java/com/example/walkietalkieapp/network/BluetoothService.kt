@@ -1,0 +1,161 @@
+package com.example.walkietalkieapp.network
+
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothServerSocket
+import android.bluetooth.BluetoothSocket
+import android.content.Context
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import com.example.walkietalkieapp.model.Device
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.util.*
+
+class BluetoothService(private val context: Context) {
+    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private var bluetoothSocket: BluetoothSocket? = null
+    private var serverSocket: BluetoothServerSocket? = null
+    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+    private val _discoveredDevices = MutableStateFlow<List<Device>>(emptyList())
+    val discoveredDevices: StateFlow<List<Device>> = _discoveredDevices
+
+    private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+    val connectionState: StateFlow<ConnectionState> = _connectionState
+
+    fun startDiscovery() {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        bluetoothAdapter?.startDiscovery()
+    }
+
+    fun stopDiscovery() {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) != PackageManager.PERMISSION_GRANTED
+            && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        ) {
+            return
+        }
+        bluetoothAdapter?.cancelDiscovery()
+    }
+
+    fun connect(device: Device, onConnected: () -> Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val bluetoothDevice = bluetoothAdapter?.getRemoteDevice(device.address)
+                bluetoothSocket = bluetoothDevice?.createRfcommSocketToServiceRecord(uuid)
+                bluetoothSocket?.connect()
+                withContext(Dispatchers.Main) {
+                    onConnected()
+                }
+            } catch (e: IOException) {
+                // Handle connection error
+            }
+        }
+    }
+
+    fun acceptConnection(onConnected: () -> Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (ActivityCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    return@launch
+                }
+                serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord("WalkieTalkie", uuid)
+                bluetoothSocket = serverSocket?.accept()
+                withContext(Dispatchers.Main) {
+                    onConnected()
+                }
+            } catch (e: IOException) {
+                // Handle error
+            }
+        }
+    }
+
+    fun sendData(data: ByteArray) {
+        try {
+            bluetoothSocket?.outputStream?.write(data)
+        } catch (e: IOException) {
+            // Handle error
+        }
+    }
+
+    fun receiveData(onDataReceived: (ByteArray) -> Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val buffer = ByteArray(1024)
+            while (true) {
+                try {
+                    val bytes = bluetoothSocket?.inputStream?.read(buffer) ?: 0
+                    if (bytes > 0) {
+                        onDataReceived(buffer.copyOf(bytes))
+                    }
+                } catch (e: IOException) {
+                    // Handle error
+                    break
+                }
+            }
+        }
+    }
+
+    fun closeConnection() {
+        try {
+            bluetoothSocket?.close()
+            serverSocket?.close()
+        } catch (e: IOException) {
+            // Handle error
+        }
+    }
+
+    fun registerReceiver() {
+        val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+        context.registerReceiver(receiver, filter)
+    }
+
+    fun unregisterReceiver() {
+        context.unregisterReceiver(receiver)
+    }
+
+    private val receiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == BluetoothDevice.ACTION_FOUND) {
+                val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                if (device != null) {
+                    if (ActivityCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.BLUETOOTH_CONNECT
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        return
+                    }
+                    val newDevice = Device(device.name ?: "Unknown", device.address, "Bluetooth")
+                    _discoveredDevices.value = _discoveredDevices.value + newDevice
+                }
+            }
+        }
+    }
+}
+
+sealed class ConnectionState {
+    object Disconnected : ConnectionState()
+    object Connected : ConnectionState()
+    object Error : ConnectionState()
+}

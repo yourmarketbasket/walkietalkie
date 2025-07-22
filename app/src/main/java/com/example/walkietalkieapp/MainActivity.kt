@@ -1,28 +1,13 @@
 package com.example.walkietalkieapp
 
 import android.Manifest
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothSocket
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
-import android.net.wifi.WifiManager
-import android.location.Location
-import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,34 +25,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.walkietalkieapp.model.Device
+import com.example.walkietalkieapp.network.BluetoothService
+import com.example.walkietalkieapp.network.WifiService
+import com.example.walkietalkieapp.ui.DeviceListScreen
 import com.example.walkietalkieapp.ui.theme.WalkieTalkieAppTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import java.io.IOException
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
-    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
-    private var bluetoothSocket: BluetoothSocket? = null
-    private var audioRecord: AudioRecord? = null
-    private var isRecording = AtomicBoolean(false)
-    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-    private val discoveredDevices = mutableMapOf<BluetoothDevice, Int>()
-    private var udpSocket: DatagramSocket? = null
-    private var targetAddress: InetAddress? = null
-    private var isWifiConnected = false
-    private val UDP_PORT = 8888
-    private val DISCOVERY_MESSAGE = "WALKIE_TALKIE_DISCOVERY"
+    private lateinit var bluetoothService: BluetoothService
+    private lateinit var wifiService: WifiService
     private var permissionsGranted by mutableStateOf(false)
-    private var lastKnownLocation: Location? = null
-    private var isReceiverRegistered = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -74,33 +46,10 @@ class MainActivity : ComponentActivity() {
         handlePermissionResult(permissions)
     }
 
-    private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
-                BluetoothDevice.ACTION_FOUND -> {
-                    val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                    val rssi: Int = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE).toInt()
-                    device?.let {
-                        if (checkBluetoothConnectPermission()) {
-                            discoveredDevices[device] = rssi
-                        }
-                    }
-                }
-                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                    if (discoveredDevices.isNotEmpty()) {
-                        connectToClosestBluetoothDevice()
-                    } else {
-                        runOnUiThread {
-                            Toast.makeText(context, "No Bluetooth devices found", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        bluetoothService = BluetoothService(this)
+        wifiService = WifiService(this)
         requestPermissions()
 
         setContent {
@@ -110,20 +59,9 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     if (permissionsGranted) {
-                        WalkieTalkieScreen(
-                            onDiscoverClick = { tryConnect() },
-                            onTalkPressed = { startRecording() },
-                            onTalkReleased = { stopRecording() },
-                            status = when {
-                                isWifiConnected -> "Wi-Fi Connected"
-                                bluetoothSocket?.isConnected == true -> "Bluetooth Connected"
-                                else -> "Disconnected"
-                            }
-                        )
+                        AppNavigator()
                     } else {
-                        PermissionRequestScreen(
-                            onRequestPermissions = { requestPermissions() }
-                        )
+                        PermissionRequestScreen { requestPermissions() }
                     }
                 }
             }
@@ -135,26 +73,16 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACCESS_WIFI_STATE,
             Manifest.permission.CHANGE_WIFI_STATE,
-            Manifest.permission.INTERNET
+            Manifest.permission.INTERNET,
+            Manifest.permission.ACCESS_FINE_LOCATION
         )
 
-        // Bluetooth permissions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_SCAN)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
         } else {
             permissions.add(Manifest.permission.BLUETOOTH)
             permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
-        }
-
-        // Location permissions
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-            }
-        } else {
-            permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
 
         return permissions.toTypedArray()
@@ -167,8 +95,6 @@ class MainActivity : ComponentActivity() {
 
         if (permissionsToRequest.isEmpty()) {
             permissionsGranted = true
-            registerReceiverIfNeeded()
-            updateLocation()
         } else {
             permissionLauncher.launch(permissionsToRequest)
         }
@@ -178,338 +104,94 @@ class MainActivity : ComponentActivity() {
         if (permissions.values.all { it }) {
             permissionsGranted = true
             Toast.makeText(this, "Permissions granted", Toast.LENGTH_SHORT).show()
-            registerReceiverIfNeeded()
-            updateLocation()
         } else {
             permissionsGranted = false
-            val permanentlyDenied = permissions.any { (permission, granted) ->
-                !granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                        !shouldShowRequestPermissionRationale(permission)
-            }
-            val message = if (permanentlyDenied) {
-                "Some permissions were permanently denied. Please enable them in Settings to use all features."
-            } else {
-                "Required permissions denied. App functionality limited."
-            }
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Required permissions denied", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun checkBluetoothConnectPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
-        }
-    }
+    @Composable
+    fun AppNavigator() {
+        val navController = rememberNavController()
+        NavHost(navController = navController, startDestination = "device_list") {
+            composable("device_list") {
+                val bluetoothDevices by bluetoothService.discoveredDevices.collectAsState()
+                val wifiDevices by wifiService.discoveredDevices.collectAsState()
+                val allDevices = bluetoothDevices + wifiDevices
 
-    private fun checkBluetoothScanPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun checkLocationPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun registerReceiverIfNeeded() {
-        if (!isReceiverRegistered && permissionsGranted) {
-            val filter = IntentFilter().apply {
-                addAction(BluetoothDevice.ACTION_FOUND)
-                addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-            }
-            registerReceiver(receiver, filter)
-            isReceiverRegistered = true
-        }
-    }
-
-    private fun updateLocation() {
-        if (checkLocationPermission()) {
-            val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            try {
-                lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                    ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-            } catch (e: SecurityException) {
-                Toast.makeText(this, "Location access denied", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun tryConnect() {
-        if (!permissionsGranted) {
-            Toast.makeText(this, "Please grant all permissions first", Toast.LENGTH_SHORT).show()
-            return
-        }
-        CoroutineScope(Dispatchers.IO).launch {
-            if (isWifiAvailable()) {
-                startWifiDiscovery()
-            } else {
-                startBluetoothDiscovery()
-            }
-        }
-    }
-
-    private fun isWifiAvailable(): Boolean {
-        if (!permissionsGranted) return false
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
-            return false
-        }
-        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        return wifiManager.isWifiEnabled
-    }
-
-    private fun startWifiDiscovery() {
-        if (!permissionsGranted) {
-            runOnUiThread {
-                Toast.makeText(this, "Permissions not granted", Toast.LENGTH_SHORT).show()
-            }
-            return
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
-            runOnUiThread {
-                Toast.makeText(this, "Wi-Fi permissions not granted", Toast.LENGTH_SHORT).show()
-            }
-            return
-        }
-
-        try {
-            udpSocket = DatagramSocket(UDP_PORT).apply {
-                broadcast = true
-            }
-            val discoveryPacket = DatagramPacket(
-                DISCOVERY_MESSAGE.toByteArray(),
-                DISCOVERY_MESSAGE.length,
-                InetAddress.getByName("255.255.255.255"),
-                UDP_PORT
-            )
-
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    udpSocket?.send(discoveryPacket)
-
-                    val receiveBuffer = ByteArray(1024)
-                    val receivePacket = DatagramPacket(receiveBuffer, receiveBuffer.size)
-
-                    udpSocket?.receive(receivePacket)
-                    val message = String(receivePacket.data, 0, receivePacket.length)
-                    if (message == DISCOVERY_MESSAGE) {
-                        targetAddress = receivePacket.address
-                        isWifiConnected = true
-                        runOnUiThread {
-                            Toast.makeText(this@MainActivity, "Wi-Fi device found", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                } catch (e: IOException) {
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "Wi-Fi discovery failed, trying Bluetooth", Toast.LENGTH_SHORT).show()
-                    }
-                    startBluetoothDiscovery()
-                }
-            }
-        } catch (e: Exception) {
-            runOnUiThread {
-                Toast.makeText(this, "Wi-Fi setup failed: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-            startBluetoothDiscovery()
-        }
-    }
-    private fun startBluetoothDiscovery() {
-        if (!permissionsGranted) {
-            runOnUiThread {
-                Toast.makeText(this, "Please grant all permissions first", Toast.LENGTH_SHORT).show()
-            }
-            return
-        }
-
-        if (!checkBluetoothScanPermission() || !checkLocationPermission()) {
-            runOnUiThread {
-                Toast.makeText(this, "Bluetooth or location permissions not granted", Toast.LENGTH_SHORT).show()
-            }
-            return
-        }
-
-        if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
-            discoveredDevices.clear()
-            bluetoothAdapter.cancelDiscovery()
-            bluetoothAdapter.startDiscovery()
-        } else {
-            runOnUiThread {
-                Toast.makeText(this, "Bluetooth is not enabled or not available", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun connectToClosestBluetoothDevice() {
-        if (!permissionsGranted || !checkBluetoothConnectPermission()) return
-        if (discoveredDevices.isEmpty()) return
-
-        val closestDevice = discoveredDevices.maxByOrNull { it.value }?.key
-        closestDevice?.let { device ->
-            try {
-                bluetoothAdapter?.cancelDiscovery()
-                bluetoothSocket = device.createRfcommSocketToServiceRecord(uuid)
-                bluetoothSocket?.connect()
-                runOnUiThread {
-                    Toast.makeText(this, "Bluetooth connected to closest device", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: IOException) {
-                runOnUiThread {
-                    Toast.makeText(this, "Bluetooth connection failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-                try {
-                    bluetoothSocket?.close()
-                } catch (e: IOException) {
-                    // Ignore
-                }
-            }
-        }
-    }
-
-    private fun startRecording() {
-        if (!permissionsGranted) {
-            Toast.makeText(this, "Please grant all permissions first", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (!isWifiConnected && bluetoothSocket?.isConnected != true) {
-            Toast.makeText(this, "No device connected", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            runOnUiThread {
-                Toast.makeText(this, "Recording permission not granted", Toast.LENGTH_SHORT).show()
-            }
-            return
-        }
-
-        val sampleRate = 44100
-        val channelConfig = AudioFormat.CHANNEL_IN_MONO
-        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-
-        try {
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
-            )
-            audioRecord?.startRecording()
-            isRecording.set(true)
-
-            CoroutineScope(Dispatchers.IO).launch {
-                val buffer = ByteArray(bufferSize)
-                while (isRecording.get()) {
-                    val read = audioRecord?.read(buffer, 0, bufferSize) ?: 0
-                    if (read > 0) {
-                        if (isWifiConnected) {
-                            targetAddress?.let { addr ->
-                                udpSocket?.send(DatagramPacket(buffer, read, addr, UDP_PORT))
+                DeviceListScreen(
+                    devices = allDevices,
+                    onDeviceClick = { device ->
+                        if (device.type == "Bluetooth") {
+                            bluetoothService.connect(device) {
+                                navController.navigate("talk")
                             }
                         } else {
-                            bluetoothSocket?.outputStream?.write(buffer, 0, read)
+                            wifiService.connect(device) {
+                                navController.navigate("talk")
+                            }
                         }
+                    },
+                    onDiscoverClick = {
+                        bluetoothService.startDiscovery()
+                        wifiService.startDiscovery()
                     }
-                }
+                )
             }
-        } catch (e: Exception) {
-            runOnUiThread {
-                Toast.makeText(this, "Recording error: ${e.message}", Toast.LENGTH_SHORT).show()
+            composable("talk") {
+                TalkScreen(
+                    onTalkPressed = { /* Start talking */ },
+                    onTalkReleased = { /* Stop talking */ }
+                )
             }
         }
     }
 
-    private fun stopRecording() {
-        isRecording.set(false)
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
+    override fun onResume() {
+        super.onResume()
+        bluetoothService.registerReceiver()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        bluetoothService.unregisterReceiver()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            bluetoothSocket?.close()
-            udpSocket?.close()
-        } catch (e: IOException) {
-            // Ignore
-        }
-        audioRecord?.release()
-        if (isReceiverRegistered) {
-            unregisterReceiver(receiver)
-            isReceiverRegistered = false
-        }
+        bluetoothService.closeConnection()
     }
 }
 
 @Composable
-fun WalkieTalkieScreen(
-    onDiscoverClick: () -> Unit,
-    onTalkPressed: () -> Unit,
-    onTalkReleased: () -> Unit,
-    status: String
-) {
+fun TalkScreen(onTalkPressed: () -> Unit, onTalkReleased: () -> Unit) {
     var isTalking by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    if (isPressed) {
-        if (!isTalking) {
-            isTalking = true
-            onTalkPressed()
-        }
-    } else if (isTalking) {
-        isTalking = false
-        onTalkReleased()
-    }
 
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Status: $status",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(16.dp)
-        )
         Button(
-            onClick = onDiscoverClick,
-            modifier = Modifier.padding(16.dp)
+            onClick = {
+                if (isTalking) onTalkReleased() else onTalkPressed()
+                isTalking = !isTalking
+            }
         ) {
-            Text("Discover Devices")
-        }
-        Button(
-            onClick = { /* No-op, handled by interactionSource */ },
-            interactionSource = interactionSource,
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(if (isTalking) "Talking..." else "Hold to Talk")
+            Text(if (isTalking) "Stop" else "Talk")
         }
     }
 }
 
 @Composable
-fun PermissionRequestScreen(
-    onRequestPermissions: () -> Unit
-) {
+fun PermissionRequestScreen(onRequestPermissions: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Please grant all required permissions, including location and Bluetooth, for device discovery and communication.",
+            text = "Please grant all required permissions to use the app.",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(16.dp)
         )
