@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
                         if (device.type == "Bluetooth") {
                             bluetoothService.pairDevice(device.address)
                         } else {
-                            wifiService.connect(device) {
+                            wifiService.connect(this@MainActivity, device) {
                                 navController.navigate("talk")
                             }
                         }
@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
                     onDiscoverClick = {
                         isDiscovering = true
                         bluetoothService.startDiscovery(this@MainActivity)
-                        wifiService.startDiscovery()
+                        wifiService.startDiscovery(this@MainActivity)
                         // Stop discovering after a certain time
                         val handler = android.os.Handler()
                         handler.postDelayed({
@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         bluetoothService.registerReceiver()
-        receiver = WiFiDirectBroadcastReceiver(wifiService.wifiP2pManager!!, wifiService.channel!!, wifiService.peerListListener)
+        receiver = wifiService.getReceiver()
         intentFilter = android.content.IntentFilter().apply {
             addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)

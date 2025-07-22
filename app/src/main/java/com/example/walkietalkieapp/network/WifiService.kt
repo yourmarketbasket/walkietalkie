@@ -11,10 +11,11 @@ import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pDeviceList
 import android.net.wifi.p2p.WifiP2pManager
-import android.net.wifi.p2p.WifiP2pConfig.WpsInfo
+import android.net.wifi.p2p.WifiP2pConfig
 import android.os.Build
 import android.os.Looper
 import android.util.Log
+import androidx.fragment.app.FragmentActivity
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -183,10 +184,10 @@ class WifiService(private val context: Context) {
         }
     }
 
-    fun stopDiscovery() {
+    fun stopDiscovery(activity: FragmentActivity) {
         if (!wifiP2pManager.isAvailable()) return
 
-        checkAndRequestPermissions(context as FragmentActivity) { granted ->
+        checkAndRequestPermissions(activity) { granted ->
             if (granted) {
                 wifiP2pManager?.stopPeerDiscovery(channel!!, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
@@ -221,6 +222,10 @@ class WifiService(private val context: Context) {
         Log.d(TAG, "Discovered ${refreshedPeers.size} devices")
     }
 
+    fun getReceiver(): WiFiDirectBroadcastReceiver {
+        return WiFiDirectBroadcastReceiver(wifiP2pManager!!, channel!!, peerListListener)
+    }
+
     fun connect(activity: FragmentActivity, device: Device, onConnected: () -> Unit) {
         if (!wifiP2pManager.isAvailable()) return
 
@@ -228,7 +233,7 @@ class WifiService(private val context: Context) {
             if (granted) {
                 val config = WifiP2pConfig().apply {
                     deviceAddress = device.address
-                    wps.setup = WpsInfo.PBC
+                    wps.setup = WifiP2pConfig.WpsInfo.PBC
                 }
                 wifiP2pManager?.connect(channel!!, config, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
@@ -271,9 +276,9 @@ class WifiService(private val context: Context) {
         }
     }
 
-    fun destroy() {
+    fun destroy(activity: FragmentActivity) {
         try {
-            stopDiscovery()
+            stopDiscovery(activity)
             wifiP2pManager?.let { manager ->
                 channel?.let { ch ->
                     manager.clearLocalServices(ch, null)
