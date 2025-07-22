@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.WalkieTalkieApp" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Theme for light mode -->
+    <style name="WalkieTalkieAppTheme" parent="Theme.Material3.Light.NoActionBar">
+        <!-- Customize your theme here -->
+        <item name="colorPrimary">@color/purple_40</item>
+        <item name="colorPrimaryVariant">@color/purple_80</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/purple_grey_40</item>
+        <item name="colorSecondaryVariant">@color/purple_grey_80</item>
+        <item name="colorOnSecondary">@color/black</item>
+    </style>
 </resources>

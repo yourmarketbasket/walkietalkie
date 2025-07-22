@@ -14,6 +14,7 @@ import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
+import androidx.core.app.ComponentActivity
 import com.example.walkietalkieapp.model.Device
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +48,7 @@ class BluetoothService(private val context: Context) {
         return ActivityCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun startDiscovery(activity: android.app.Activity) {
+    fun startDiscovery(activity: ComponentActivity) {
         if (bluetoothAdapter == null) {
             Log.e(TAG, "Bluetooth not supported on this device")
             return

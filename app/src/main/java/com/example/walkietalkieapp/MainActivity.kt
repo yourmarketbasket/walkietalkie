@@ -5,7 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -38,7 +38,7 @@ import android.util.Log
 import com.example.walkietalkieapp.ui.IncomingCallScreen
 import com.example.walkietalkieapp.ui.theme.WalkieTalkieAppTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private lateinit var bluetoothService: BluetoothService
     private lateinit var wifiService: WifiService
     private var permissionsGranted by mutableStateOf(false)
@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
                         bluetoothService.startDiscovery(this@MainActivity)
                         wifiService.startDiscovery(this@MainActivity)
                         // Stop discovering after a certain time
-                        val handler = android.os.Handler()
+                        val handler = android.os.Handler(android.os.Looper.getMainLooper())
                         handler.postDelayed({
                             isDiscovering = false
                             bluetoothService.stopDiscovery()

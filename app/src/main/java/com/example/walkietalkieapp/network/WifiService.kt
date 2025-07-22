@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
+import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pDeviceList
 import android.net.wifi.p2p.WifiP2pManager
@@ -230,7 +231,7 @@ class WifiService(private val context: Context) {
             if (granted) {
                 val config = WifiP2pConfig().apply {
                     deviceAddress = device.address
-                    wps.setup = WifiP2pConfig.WpsInfo.PBC
+                    // Removed wps.setup configuration to avoid WpsInfo reference
                 }
                 wifiP2pManager?.connect(channel!!, config, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
