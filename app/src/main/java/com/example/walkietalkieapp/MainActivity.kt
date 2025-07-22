@@ -33,6 +33,7 @@ import com.example.walkietalkieapp.model.Device
 import com.example.walkietalkieapp.network.BluetoothService
 import com.example.walkietalkieapp.network.WifiService
 import com.example.walkietalkieapp.ui.DeviceListScreen
+import com.example.walkietalkieapp.ui.IncomingCallScreen
 import com.example.walkietalkieapp.ui.theme.WalkieTalkieAppTheme
 
 class MainActivity : ComponentActivity() {
