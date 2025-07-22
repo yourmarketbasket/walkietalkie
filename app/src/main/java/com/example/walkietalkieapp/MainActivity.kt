@@ -41,15 +41,14 @@ class MainActivity : ComponentActivity() {
             permissionHandler.requestPermissions()
         }
 
-        val mainState = rememberMainState()
-        mainViewModel = MainViewModel(this, mainState)
-
         setContent {
             WalkieTalkieAppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val mainState = rememberMainState()
+                    mainViewModel = MainViewModel(this, mainState)
                     val isDiscovering by mainState.isDiscovering
                     val discoveredDevices by mainState.discoveredDevices
                     val connectionRequest by mainState.connectionRequest
